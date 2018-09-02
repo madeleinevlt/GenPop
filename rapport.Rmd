@@ -1,0 +1,425 @@
+---
+title: 'Projet : Génétique des populations'
+author: "Madeleine DE SOUSA & Sandrine FARTEK"
+output: 
+  pdf_document:
+    fig_caption: yes
+    highlight: zenburn
+---
+
+
+```{r echo=FALSE, message=FALSE, results=FALSE}
+### Librairies
+if (!require("ggplot2")) install.packages("ggplot2")
+library(ggplot2)
+
+if (!require("gridExtra")) install.packages("gridExtra")
+library(gridExtra)
+```
+
+```{r echo=FALSE, message=FALSE, results=FALSE}
+### Fonction calculant ln(H/H0)
+calcul_ln <- function(mat) {
+  ln = log(mat$m_Het/mat$m_Het[1])
+  return(ln)
+}
+
+### Fonction calculant l'effectif efficace
+calcul_ne <- function(mat) {
+  lm = lm(mat$ln ~ mat$t)
+  ne = 1 / (2*(1-exp(lm$coefficient[2])))
+  return(ne)
+}
+
+### Fonction calculant l'effectif efficace pour une population croissante
+calcul_ne_cycle <- function(mat) {
+  nt = vector()
+  for (i in 2:length(mat$t)) {
+    nt[i-1] = 1/calcul_ne(mat[1:i,])
+  }
+  invNe = (1/length(mat$t))*sum(nt)
+  return(1/invNe)
+}
+```
+
+```{r echo=FALSE, message=FALSE, results=FALSE}
+### Données populations de Wright-Fisher
+d.WF50 = read.table("results/WrightFisher_N50.txt", header=T)
+d.WF100 = read.table("results/WrightFisher_N100.txt", header=T)
+d.WF500 = read.table("results/WrightFisher_N500.txt", header=T)
+
+### Données populations avec variation du sex-ratio
+d.sex5 = read.table("results/SexRatio_5.txt", header=T)
+d.sex5 = cbind(d.sex5, males=rep("5%", length(d.sex5$t)))
+d.sex10 = read.table("results/SexRatio_10.txt", header=T)
+d.sex10 = cbind(d.sex10, males=rep("10%", length(d.sex10$t)))
+d.sex25 = read.table("results/SexRatio_25.txt", header=T)
+d.sex25 = cbind(d.sex25, males=rep("25%", length(d.sex25$t)))
+d.sex50 = read.table("results/SexRatio_50.txt", header=T)
+d.sex50 = cbind(d.sex50, males=rep("50%", length(d.sex50$t)))
+
+### Données populations avec autofécondation
+d.auto0 = read.table("results/Autofecondation_0.txt", header=T)
+d.auto0 = cbind(d.auto0, autofecondation=rep("0%", length(d.auto0$t)))
+d.auto50 = read.table("results/Autofecondation_50.txt", header=T)
+d.auto50 = cbind(d.auto50, autofecondation=rep("50%", length(d.auto50$t)))
+d.auto75 = read.table("results/Autofecondation_75.txt", header=T)
+d.auto75 = cbind(d.auto75, autofecondation=rep("75%", length(d.auto75$t)))
+d.auto100 = read.table("results/Autofecondation_100.txt", header=T)
+d.auto100 = cbind(d.auto100, autofecondation=rep("100%", length(d.auto100$t)))
+
+### Données populations avec croissance
+d.cycle1 = read.table("results/CycleDemographique_1.txt", header=T)
+d.cycle1 = cbind(d.cycle1, croissance=rep("1%",length(d.cycle1$t)))
+d.cycle2 = read.table("results/CycleDemographique_2.txt", header=T)
+d.cycle2 = cbind(d.cycle2, croissance=rep("2%",length(d.cycle2$t)))
+d.cycle5 = read.table("results/CycleDemographique_5.txt", header=T)
+d.cycle5= cbind(d.cycle5, croissance=rep("5%",length(d.cycle5$t)))
+
+### Données populations avec variance du succès reproducteur
+d.var0 = read.table("results/resultvar0.txt", header=T)
+d.var0 = cbind(d.var0, nbindividu0=rep("0", length(d.var0$t)))
+d.var10 = read.table("results/resultvar10.txt", header=T)
+d.var10 = cbind(d.var10, nbindividu0=rep("10", length(d.var10$t)))
+d.var20 = read.table("results/resultvar20.txt", header=T)
+d.var20 = cbind(d.var20, nbindividu0=rep("20", length(d.var20$t)))
+d.var30 = read.table("results/resultvar30.txt", header=T)
+d.var30 = cbind(d.var30, nbindividu0=rep("30", length(d.var30$t)))
+
+### Ajouter colonne ln(Ht/H0)
+for (obj in ls(pattern="d.")) {
+  a = mget(obj)[[1]]
+  b = calcul_ln(mget(obj)[[1]])
+  assign(obj, cbind(a, ln=b))
+}
+rm(list = c('a','b','obj'))
+
+### Bind datas
+d.WF = rbind(d.WF50, d.WF100, d.WF500)
+d.sex = rbind(d.sex5, d.sex10, d.sex25, d.sex50)
+d.auto = rbind(d.auto0, d.auto50, d.auto75, d.auto100)
+d.cycle = rbind(d.cycle1, d.cycle2, d.cycle5)
+d.var = rbind(d.var0, d.var10, d.var20, d.var30)
+
+### Nettoyage
+rm(list = c('d.WF50','d.WF100','d.WF500'))
+rm(list = c('d.sex5','d.sex10','d.sex25','d.sex50'))
+rm(list = c('d.auto0','d.auto50','d.auto75','d.auto100'))
+rm(list = c('d.cycle1','d.cycle2','d.cycle5'))
+rm(list = c('d.var0','d.var10','d.var20','d.var30'))
+```
+
+```{r echo=FALSE, message=FALSE, results=FALSE}
+# Calcul effectif efficace
+ne.WF = by(data=d.WF, d.WF$PopSize, calcul_ne)
+ne.sex = by(data=d.sex, d.sex$males, calcul_ne)
+ne.auto = by(data=d.auto, d.auto$autofecondation, calcul_ne)
+tmp = d.cycle[d.cycle$t %in% c(1:99),]
+ne.cycle = by(data=tmp, tmp$croissance, calcul_ne_cycle)
+ne.var = by(data=d.var, d.var$nbindividu0, calcul_ne)
+```
+
+
+# Introduction
+
+Par ce projet, nous souhaitons étudier par simulation, l'influence de différents facteurs sur la vitesse d'évolution de l'hétérozygotie moyenne $\bar{H}(t)$ au sein d'une population. Les facteurs étudiés un à un sont des entorses aux hypothèses du modèle de Wright-Fisher :
+\begin{itemize}
+  \item Proportion de mâles et femelles inégale
+  \item Autofécondation 
+  \item Variance du succès reproducteur au sein de la population
+  \item Taille de la population croissante  
+\end{itemize}
+
+L'espèce considérée est supposée diploïde. On s'intéresse à un locus autosomal, neutre, sans mutation et présentant une diversité initiale maximale, les générations sont non-chevauchantes et il n'y a pas de migration. \newline
+
+Par ces simulations, nous étudierons également l'influence sur l'effectif efficace $Ne$, ce dernier étant défini comme la taille $N$ qu'une population idéale de Wright-Fisher devrait avoir afin de dériver à la même vitesse qu'une population réelle.
+
+```{r echo=FALSE, message=FALSE, results=FALSE, fig.align='center', fig.height=3, fig.width=10}
+g1 <- ggplot() +
+  geom_line(data=d.WF, aes(x=t, y=m_Het, color=as.factor(PopSize))) +
+  ggtitle("Hétérozygotie moyenne vs Génération") +
+  xlab("Génération t") +
+  ylab("Hétérozygotie moyenne H(t)") +
+  guides(color=guide_legend("Taille de la\npopulation"))
+
+g2 <- ggplot() +
+  geom_line(data=d.WF, aes(x=t, y=ln, color=as.factor(PopSize))) +
+  ggtitle("Hétérozygotie moyenne vs Génération") +
+  xlab("Génération t") +
+  ylab("ln(H(t)/H0)") +
+  theme(legend.position="none")
+
+grid.arrange(g1, g2, ncol=2)
+```
+\begin{figure}[h!]
+  \caption{Evolution de l'hétérozygotie moyenne H(t) en fonction des générations t pour une population de Wright-Fisher et de taille constante N = 100. La moyenne de l'hétérozygotie est calculée sur 5000 simulations indépendantes.}
+\end{figure}
+
+
+#Matériel et méthode
+
+##Code général
+
+Le programme est découpé en 8 fichiers :
+\begin{itemize}
+  \item main.c, qui permet de lancer le programme
+  \item d\_util, qui permet de gérer l'allocation de mémoire et les variables aléatoires (notamment pour choisir un individu)
+  \item genpop.c, qui permet de gérer les allèles, les locus, le génome, les gamètes et les individus
+  \item model\_WrightFisher.c, model\_Autofecondation.c, model\_CycleDemographique.c, model\_SexRatio.c et model\_Variance.c qui permettent de gérer les différentes simulations.
+\end{itemize}
+
+L'utilisateur choisit un simulation avec ses paramètres (nombre de générations, taille de la population etc) et le programme va créer un génome, les locus (à partir des allèles) et les tableaux qui contienderont les données de sorties. Puis, le programme lancera la simulation.
+
+Les simulations peuvent être expliqués comme ceci :
+
+    allocation mémoire de toutes les variables necessaires
+    Pour chaque individus :
+        attribution des gènes paternels et maternels
+        attribution du sexe           #de base, les individus sont hermaphrodites
+        ajouter cet individu dans la population
+    Pour chaque générations :
+       Calcul de l'hétérozygocitie et stockage des resultats
+       Pour i allant de 0 au nombre d`individus :
+           Choix du père et de la mère aléatoirement dans le tableau des individus
+           Choix du sexe
+           Création de l'enfant
+
+
+
+##Remise en cause du modèle de Wright-Fisher : le sex-ratio
+
+La remise en cause du modèle de Wright-Fisher du sexe ratio permet de simuler une population avec deux sexes différents. Les individus, au lieu d'être hermaphrodites, ont un sexe, et ne peuvent s'accoupler qu'avec le sexe opposé. Pour cela, les individus qui sont stockés dans la population ont un pointeur global\_\_male et global\_\_female qui permettent de différencier les sexes. Pour garder le même ratio mâle-femelle que l'utilisateur a choisit, les enfants n'ont pas un sexe aléatoire. 
+
+##Remise en cause du modèle de Wright-Fisher : l'autofécondation
+
+La remise en cause du modèle de Wright-Fisher de l'autofécondation permet de simuler une population où certains individus n'ont pas besoin d'un autre individu pour se reproduire. Les individus sont toujours hermaphrodite. Pour cela, lorsque les individus se reproduisent, nous choississons ceux qui font faire de l'autogamie et ceux qui vont faire de l'allogamie (à partir du taux d'autofécondation que l'utilisateur va rentrer). Les individus qui font de l'allogamie vont faire un enfant à partir de deux individus choisis aléatoirement. Les individus qui font de l'autogamie sont des mères (comme les individus sont hermaphrodites, les individus femelles sont les mêmes que les individus mâles) qui sont choisis aléatoirement pour se reproduire avec elle-mêmes.
+
+##Remise en cause du modèle de Wright-Fisher : le succès reproducteur
+
+La remise en cause du modèle de Wright-Fisher du succès reproducteur permet de simuler une population où certains individus n'auront aucun enfant pendant que d'autres en auront plus pour garder un nombre d'individus constant. Les individus peuvent produire 0 gamètes, 2 gamètes (un enfant) ou 4 gamètes (deux enfants) selon la formule :
+$$N2 = N - (2* N0) $$
+$$N4 = N0$$
+
+Avec $N2$ qui corresponds au nombre d'individus qui produiront 2 gamètes, $N4$ le nombre d'individus qui produiront 4 gamètes et $N0$ le nombre d'individus ne produiront 0 gamètes. L'utilisateur ne pourra pas choisir un $N0$ plus grand que $N-2$.
+Pour simuler cela, nous avons choisis que les individus $N2$ auront le même comportement que celui décrit dans le modèle de Wright-Fisher (deux individus vont faire un enfant), et les individus $N4$ vont faire dans un premier temps un enfant, puis vont choisir un autre individu aléatoirement pour faire le deuxième enfant (puisque un individu peut choisir un autre individu pour faire son enfant). Les individus étant hermaphrodite, nous avons choisis de prendre aléatoirement une deuxième mère pour faire le deuxième enfant.
+
+##Remise en cause du modèle de Wright-Fisher : le cycle démographique
+
+La remise en cause du modèle de Wright-Fisher du cycle démographique permet de simuler une population croissante avec des goulots d'étranglements. 
+Afin d'éviter une perte de temps en ré-allocation mémoire, la mémoire des populations ParentPop et OffspringPop est allouée avec le nombre d'individus maximal en fin de cycle, ce dernier étant décrit par l'équation ci-dessous. Comme les individus sont tirés aléatoirement dans des tableaux de pointeurs sur les individus mâles ou femelles et non pas directement dans le tableau contenant les individus, cela ne pose pas de problème. 
+$$N(t + n) = N(t) * (1+r)^{n}$$
+Nous avons choisi d'interpréter le goulot d'étranglement comme étant l'avant dernière génération d'un cycle ne produisant que N(0) descendants plutôt que générer l'ensemble des descendants et en supprimer une partie.
+
+
+
+#Résultats
+
+## Variation du sex-ratio
+
+```{r echo=FALSE, message=FALSE, results=FALSE, fig.align='center', fig.height=3, fig.width=10}
+g1 <- ggplot() +
+  geom_line(data=d.sex, aes(x=t, y=m_Het, color=males)) +
+  ggtitle("Hétérozygotie moyenne vs Génération") +
+  xlab("Génération t") +
+  ylab("Hétérozygotie moyenne H(t)")
+
+g2 <- ggplot() +
+  geom_line(data=d.sex, aes(x=t, y=ln, color=males)) +
+  ggtitle("Hétérozygotie moyenne vs Génération") +
+  xlab("Génération t") +
+  ylab("ln(H(t)/H0)") +
+  theme(legend.position="none")
+
+grid.arrange(g1, g2, ncol=2)
+```
+\begin{figure}[h!]
+  \caption{Évolution de l'hétérozygotie moyenne H(t) en fonction des générations t pour des populations variant en proportion de mâles et de taille constante N = 100. La moyenne de l'hétérozygotie est calculée sur 5000 simulations indépendantes.}
+\end{figure}
+
+```{r echo=FALSE, message=FALSE, results=FALSE}
+ne.sex
+```
+On observe sur les courbes, Figure 2, que la proportion de mâles/femelles joue sur l'hétérozygotie moyenne de la population. En effet, un nombre différent de mâles et de femelles va entraver la diversité génétique puisque certains individus d'un sexe s'accoupleront plus souvent afin de garder une population de taille constante.  
+
+Pour le modèle de Wright-Fisher, l'effectif efficace attendu est de $Ne$ = $N$. Pour une population avec reproduction sexuée, l'effectif efficace dépend du ratio mâles/femelles. Chaque parent a une probabilité de $\frac{1}{2}$ de transmettre son gène. Si on regarde pour les mâles, il y a une probabilité de $\frac{1}{4*Nm}$ pour qu'un gène provienne du père. Sachant que la probabilité qu'un individu dans une population de Wright-Fisher ait un gène d'un parent est de $\frac{1}{2N}$, l'effectif efficace pour une population de mâle et de femelles est de :
+$$ \frac{1}{2Ne} = \frac{1}{4Nm} + \frac{1}{4Nf} \Rightarrow Ne =\frac{4Nf*Nm}{Nf + Nm} $$
+
+Pour 50 mâles, nous avons $Ne \approx 100$, ce qui signifie que nous avons une variation du polymorphisme d'une population naturelle de 100 individus. Chaque individus a pu se reproduire. Lorsqu'il y a moins ou plus de femelles, on observe un déséquilibre, puisque les individus ne se reproduisent qu'une fois. Cela veut dire qu'il n'y aura trop ou pas assez de femelles pour tenir l'effectif d'une population de 100 individus. \newline
+
+```{r echo=FALSE, message=FALSE, results=FALSE, fig.align='center', fig.height=2, fig.width=4}
+resNe = read.table("results/SexRatio_Ne.txt", header=TRUE)
+
+ggplot() +
+  geom_line(data=resNe, aes(x=PopSize, y=Ne)) +
+  ggtitle("Sex-ratio vs Effectif efficace") +
+  xlab("Proportion de mâles") +
+  ylab("Effecitf efficace Ne")
+```
+\begin{figure}[h!]
+  \caption{Évolution de l'effectif efficace Ne en fonction de la proportion de mâles dans une population de taille constante N = 100. La moyenne de l'hétérozygotie est calculée sur 500 simulations indépendantes.}
+\end{figure}
+
+
+
+## Variation du taux d'autofécondation
+
+On constate que la dérive s'accélère quand le taux d'autofécondation augmente. En effet, quand l'hétérozygotie diminue, le nombre maximal d'individus hétérozygotes diminue également. Donc le fait qu'un individu se reproduise avec lui-même, sachant qu'il a moins de chance d'être hétérozygote, accélère le processus de fixation des allèles.
+
+```{r echo=FALSE, message=FALSE, results=FALSE, fig.align='center', fig.height=3, fig.width=10}
+g1 <- ggplot() +
+  geom_line(data=d.auto, aes(x=t, y=m_Het, color=autofecondation)) +
+  ggtitle("Hétérozygotie moyenne vs Génération") +
+  xlab("Génération t") +
+  ylab("Hétérozygotie moyenne H(t)") +
+  guides(color=guide_legend("Taux\nd'autofécondation"))
+
+g2 <- ggplot() +
+  geom_line(data=d.auto, aes(x=t, y=ln, color=autofecondation)) +
+  ggtitle("Hétérozygotie moyenne vs Génération") +
+  xlab("Génération t") +
+  ylab("ln(H(t)/H0)") +
+  theme(legend.position="none")
+
+grid.arrange(g1, g2, ncol=2)
+```
+\begin{figure}[h!]
+  \caption{Évolution de l'hétérozygotie moyenne H(t) en fonction des générations t pour des populations variant en taux d'autofécondation et de taille constante N = 100. La moyenne de l'hétérozygotie est calculée sur 5000 simulations indépendantes.}
+\end{figure}
+
+```{r echo=FALSE, message=FALSE}
+res=as.data.frame(c(ne.auto[1],ne.auto[2],ne.auto[3],ne.auto[4]))
+colnames(res)="Ne"
+print(res)
+```
+
+On observe ici que le $Ne$ diminue lorsque le taux d'autofécondation augmente, mais il diminue moins rapidement que pour le sexe-ratio. Cela est dû au fait que si un individu hétérozygote se reproduit avec lui-même, l'enfant a plus de chance d'être hétérozygote.
+
+## Variation du taux de croissance
+
+```{r echo=FALSE, message=FALSE, results=FALSE, fig.align='center', fig.height=3, fig.width=10}
+# $\N(t + n) = N(t) + (1+r)^{n}
+g1 <- ggplot() +
+  geom_line(data=d.cycle, aes(x=t, y=m_Het, color=croissance)) +
+  ggtitle("Hétérozygotie moyenne vs Génération") +
+  xlab("Génération t") +
+  ylab("Hétérozygotie moyenne H(t)")
+
+g2 <- ggplot() +
+  geom_line(data=d.cycle, aes(x=t, y=log10(PopSize), color=croissance)) +
+  ggtitle("Taille de la population vs Génération") +
+  xlab("Génération t") +
+  ylab("log10(nombre d'individus)")
+
+grid.arrange(g1, g2, ncol=2)
+```
+\begin{figure}[h!]
+  \caption{Évolution de l'hétérozygotie moyenne H(t) en fonction des générations t pour des populations variant en taux de croissance et de taille initiale N = 100. Un goulot d'étranglement se produisant entre la 99ème et 100ème génération de chaque cycle. La moyenne de l'hétérozygotie est calculée sur 500 simulations indépendantes.}
+\end{figure}
+
+Comme la taille de la population augmente, il est normal d'observer une dérive génétique plus lente. Quand on simule des populations de Wright-Fisher de différentes tailles, les plus grandes dérivent effectivement plus lentement. Cependant l'hétérozygotie semble converger à partir d'un certain nombre de générations, plus ou moins grand selon le taux de croissance. Le goulot d'étranglement à la 100ème génération permet de déclencher un nouveau cycle de diminution de l'hétérozygotie, de la même valeur semble-t-il.
+
+Ici, comme la taille de la population varie, l'effectif efficace devient : 
+$$\frac{1}{Ne} =\frac{1}{n} \sum_{i=1}^{n} \frac{1}{Ni} $$
+L’effectif efficace $Ne$ (calculé sur les 100er cycles) montre que plus la croissance est importante, plus le nombre
+d’individus d’une population idéale de Wright-Fisher dérivant à la même vitesse que la population étudiée est
+grand. Un $Ne = 251$ paraît cependant faible sachant que la taille de la population atteinte en fin de cycle est
+de l’orde de $10^{4}$.
+
+```{r echo=FALSE, message=FALSE}
+res=as.data.frame(c(ne.cycle[1],ne.cycle[2],ne.cycle[3]))
+colnames(res)="Ne"
+print(res)
+```
+
+
+
+## Variation du succès reproducteur
+
+```{r echo=FALSE, message=FALSE, results=FALSE, fig.align='center', fig.height=3, fig.width=10}
+g1 <- ggplot() +
+  geom_line(data=d.var, aes(x=t, y=m_Het, color=as.factor(nbindividu0))) +
+  ggtitle("Hétérozygotie moyenne vs Génération") +
+  xlab("Génération t") +
+  ylab("Hétérozygotie moyenne H(t)") +
+  guides(color=guide_legend("Individus ne \nlaissant \naucun gène"))
+
+g2 <- ggplot() +
+  geom_line(data=d.var, aes(x=t, y=ln, color=as.factor(nbindividu0))) +
+  ggtitle("Hétérozygotie moyenne vs Génération") +
+  xlab("Génération t") +
+  ylab("Hétérozygotie moyenne H(t)") +
+  ylab("ln(H(t)/H0)") +
+  theme(legend.position="none")
+
+grid.arrange(g1, g2, ncol=2)
+```
+\begin{figure}[h!]
+  \caption{Évolution de l'hétérozygotie moyenne H(t) en fonction des générations t pour des populations variant sur le nombre de gènes transmis par individus et de taille constante N = 100. La moyenne de l'hétérozygotie est calculée sur 5000 simulations indépendantes.}
+\end{figure}
+
+Lorsque certains individus ont un succès reproducteur nul (c'est-à-dire qu'ils n'ont pas de descendant), les autres individus vont plus se reproduire pour garder la taille de la population constante. Cela entraîne une forte baisse de l'hétérozygotie moyenne de la population, puisque un individu a plus de chance de se reproduire avec un individu ayant les mêmes parents que lui.
+
+```{r echo=FALSE, message=FALSE}
+res=as.data.frame(c(ne.var[1],ne.var[2],ne.var[3],ne.var[4]))
+colnames(res)="Ne"
+print(res)
+```
+
+Ici, le $Ne$ diminue très rapidement, ce qui correspond au fait que les individus qui vont se reproduire entre-eux ont de très grandes chances de provenir du même parent, favorisant alors la consanguinité.
+
+#Discussion
+
+Avec ces simulations, nous pouvons voir que les différents facteurs entraînent un grand déficit d'hétérozygoties. Nous retrouvons bien l'effet Wahlund puisqu'il y a un excès d'homozygotes et que nous ne subdivisons pas notre population.
+Si nous regardons effectif efficace du Sex-ratio, nous retrouvons bien la représentation en "cloche" avec 50% de mâles = $N$. Ici la simulation fait en sorte de garder une population de taille constante, mais une grande différence de mâles et de femelles devrait entraîner une decroissance de la population dans une population réelle. 
+
+
+Pour la variation du taux d'autofécondation, lorsque tous les individus sont autogames, l'hétérozygotie moyenne baisse fortement. Si chaque individus fait un enfant lui-même, la diversité entre individus va rester la même sur chaque génération. De ce fait, il ne va pas y avoir une diminution de la diversité. L'hétérozygocitie va bien évoluer au cours du temps (formule : $Het(t) = Het(0)*exp\frac{-t}{2N}$) ) mais le taux d'autofécondation ne va pas évoluer. Finalement, le résultat ressemblera fortement à celui d'une population consanguine.
+
+
+Lorsque nous observons les courbes de la variation du taux de croissance, nous pouvons voir que les courbes ont exactement la même allure avant et après le goulot d'étranglement. Le goulot d'étranglement peut donc accélérer la diminution de l'hétérozygocitie moyenne dans une population à forte croissance.
+
+
+La variation du succès reproducteur ressemble beaucoup à une population consanguine. En effet, si certains individus vont faire plus d'enfants que les autres, nous aurons des enfants qui pourront avoir les memes allèles. Que le succès reproducteur joue sur ces nouveaux individus ou non, ces nouveaux individus proviennent pour la plupart de la même descendance, si bien qu'à la fin ils risquent de se reproduire entre-eux. Si nous étudions une population avec un certain pourcentage d'individus consanguins, nous aurons les mêmes résultats à la fin, c'est-à-dire que toute la population aura les mêmes allèles.
+
+
+
+
+
+Si nous étudions les $Ne$ de chaque simulations, les résultats sont bien vérifiés par les courbes de Wright-Fisher. Par exemple, la courbe du sexe-ratio avec 50% de mâles à la même allure que la courbe de Wright-Fisher avec une population de 100. La courbe de 100% d'autofécondation a la même allure que la courbe de Wright-Fisher avec $N = 50$. La courbe du succès reproducteur entre 20 et 30 individus 0 corresponds à peut près à la courbe de Wright-Fisher avec un $N=50$. 
+
+
+En comparant les $Ne$ entre-eux, on se rends compte que la simulation qui a une hétérozygotie moyenne qui décroît le plus rapidement est le succès reproducteur. Cela semble correct puisque certains individus vont complètement disparaître pendant que d'autres vont faire plusieurs enfants. Plus nous augmentons le nombre d'individus 0, plus nous aurons des individus qui feront beaucoup d'enfants. L'hétérozygocitie moyenne va donc baisser très rapidement.
+
+#Conclusion
+
+Ces différentes simulations ont permis de mettre en évidence les différents facteurs qui entravent plus ou moins rapidement l'hétérozygotie moyenne d'une population. Cela permet de comprendre l'évolution d'une population et la rapidité de la fixation d'un allèle. Néanmoins, sur une population réelle, ces différents facteurs et d'autres externes (migration par exemple) agissent en même temps. Il faut donc prendre cela en compte sur de réelles simulations.
+
+
+
+```{r echo=FALSE, message=FALSE, results=FALSE, eval=FALSE}
+## Commandes
+
+#Les données utilisées dans le compte-rendu ont été générées grâce aux commandes listées ci-dessous. \linebreak
+./mbi_ne WrightFisher 50 500 5000
+./mbi_ne WrightFisher 100 500 5000
+./mbi_ne WrightFisher 500 500 5000
+
+./mbi_ne SexRatio 5 95 500 5000
+./mbi_ne SexRatio 10 90 500 5000
+./mbi_ne SexRatio 25 75 500 5000
+./mbi_ne SexRatio 50 50 500 5000
+
+./mbi_ne Autofecondation 100 0 500 5000
+./mbi_ne Autofecondation 100 0.5 500 5000
+./mbi_ne Autofecondation 100 0.75 500 5000
+./mbi_ne Autofecondation 100 1 500 5000
+
+./mbi_ne CycleDemographique 100 0.01 100 2 500
+./mbi_ne CycleDemographique 100 0.02 100 2 500
+./mbi_ne CycleDemographique 100 0.05 100 2 500
+
+./mbi_ne Variance 100 0 100 5000
+./mbi_ne Variance 100 10 100 5000
+./mbi_ne Variance 100 20 100 5000
+./mbi_ne Variance 100 30 100 5000
+```

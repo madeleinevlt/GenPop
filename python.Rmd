@@ -1,0 +1,34 @@
+---
+title: "Untitled"
+author: "Madeleine DE SOUSA & Sandrine FARTEK"
+date: "1 avril 2018"
+output: html_document
+---
+
+```{r eval=FALSE}
+import os
+
+i=0
+
+for i in range(1,100) :
+  res=os.system("program/./mbi_ne SexRatio " + str(i) + " " + str(100-i) +" 100 500 > test" + str(i))
+```
+
+```{r}
+i=0
+resNe=c()
+
+for (i in 1:99) {
+  a=paste("results/ne/test",i,sep="")  
+  d=read.table(a, header=T)
+  lH=log(d$m_Het/d$m_Het[1]+0.0000001)
+  Reg=lm(lH ~ 0 + d$t)
+  Beta=coef(Reg)
+  Ne=1/(2*(1-exp(Beta)))
+  resNe=c(resNe,Ne)
+}
+res = cbind(PopSize=1:99, Ne=resNe)
+rownames(res) = c()
+
+write.table(res, file="results/SexRatio_Ne.txt",col.names=TRUE, row.names=FALSE)
+```
